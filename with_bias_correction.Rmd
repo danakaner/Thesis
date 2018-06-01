@@ -16,6 +16,8 @@ library(quantreg)
 ## Data Manipulation
 library(reshape) 
 library(dplyr) 
+library(reshape2)
+
 
 ## Visualization
 library(ggplot2) 
@@ -32,6 +34,9 @@ library(DT)
 library(isotone)
 library(sqldf)
 
+
+library(foreach)
+library(doParallel)
 ```
 
 ```{r}
@@ -46,11 +51,16 @@ colors = rainbow(20) ##colors for plot
 
 ```{r}
 randomize_data <- function(n, error_distribution_type, error_distribution_params, 
-                           x_mean, x_sd, true_coefs_x, rho = 0) {
+                           x_mean, x_sd, rho = 0, p, true_coefs_x = NULL) {
   
   ## assuming same rho for all xs
   
-  p <- length(true_coefs_x) - 1
+  ## if we give p than all coefs are one, else we have to give the vector of coefs 
+  if (is.null(p)) {
+    p <- length(true_coefs_x) -1
+  } else {
+    true_coefs_x <- rep(1, p+1)
+  }
   y <- rep(0,n)
   
   randomized_data <- data.frame(matrix(NA, nrow = n, ncol = p+1))
@@ -90,10 +100,14 @@ randomize_data <- function(n, error_distribution_type, error_distribution_params
 ## compute_conditional_quantile_line
 ```{r}
 compute_conditional_quantile_line <- function(tau_true, error_distribution_type, 
-                                              error_distribution_params, true_coefs_x, rho = 0) {
+                                              error_distribution_params, rho = 0, p, true_coefs_x = NULL) {
 
     
-  p <- length(true_coefs_x) - 1
+  if (is.null(p)) {
+    p <- length(true_coefs_x) -1
+  } else {
+    true_coefs_x <- rep(1, p+1)
+  }
 
   quan_line_coefficients <- data.frame(matrix(NA, nrow = 1, ncol = p+1))
   
@@ -123,8 +137,15 @@ compute_conditional_quantile_line <- function(tau_true, error_distribution_type,
 
 ```{r}
 compute_test_predictions_under_settings <- function(n, error_distribution_type, error_distribution_params,
-                                                n_test, test_data, x_mean, x_sd, rho = 0, 
+                                                n_test, test_data, x_mean, x_sd, rho = 0, p,true_coefs_x = NULL,
                                                 bias_correction_val_size = 0.8, sample_size = 1000) {
+  
+  if (is.null(p)) {
+    p <- length(true_coefs_x) -1
+  } else {
+    true_coefs_x <- rep(1, p+1)
+  }
+  
   
   test_predictions = data.frame(matrix(NA, nrow = n_test*(length(taus_wrong)+1), ncol = (sample_size + 3)))
   ## bias correction only for taus wrong
@@ -134,7 +155,7 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
   ## compute true line and its prediction on test set
   quan_line_coefficients <- 
   compute_conditional_quantile_line(tau_true, error_distribution_type, 
-                                    error_distribution_params, true_coefs_x, rho = rho)
+                                    error_distribution_params, true_coefs_x, rho = rho, p =p)
 
   true_quan_line_on_test <- 
     as.matrix(cbind(rep(1,n_test),(test_data %>% dplyr::select(-c(y))))) %*% c(t(quan_line_coefficients))
@@ -144,7 +165,7 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
   for (sample in seq(1,sample_size)) {
   
     train_data <- randomize_data(n, error_distribution_type, error_distribution_params, 
-                                 x_mean, x_sd, true_coefs_x, rho = rho) 
+                                 x_mean, x_sd, true_coefs_x, rho = rho, p=p) 
     
     ## first fit tau_true quantile model 
     fit_true <- rq(y ~ ., tau = tau_true, data = train_data)
@@ -167,7 +188,7 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
          
          ## bias_correction
          len <- dim(train_data)[1]
-         bs <- 20
+         bs <- 50
          step_mean_test <- rep(0, length(predict_wrong))
 
          for (b in 1:bs) {
@@ -262,7 +283,7 @@ compute_Bias_Var <- function(test_predictions, n_test) {
 
 ```{r}
 ## model settings
-true_coefs_xs <- list(rep(1,2), rep(1,9) , rep(1,16))
+ps <- c(1,8,15)
 rhos <- c(0,1)
 
 tau_true <- 0.99
@@ -296,31 +317,30 @@ sigmas <- c(0.001, 0.01, 0.1)
 ```{r}
 # errors_normal <- data.frame()
 # 
-# for (true_coefs_x in true_coefs_xs) {
+# for (p in ps) {
 #    for (rho in rhos) {
 # 
 #     for (sigma in sigmas) {
 # 
 #     test_data <- randomize_data(n_test, error_distribution_type = "norm",
 #                                 error_distribution_params = sigma,
-#                                 x_mean = x_mean, x_sd = x_sd,
-#                                 true_coefs_x = true_coefs_x, rho = rho)
+#                                 x_mean = x_mean, x_sd = x_sd, p = p , rho = rho)
 # 
 #     for (n in ns) {
-#       
-#          
-#          cat("p: " ,length(true_coefs_x)-1, "rho: ", rho, "sigma: ", sigma, ", n:", n, "\n")
+# 
+# 
+#          cat("p: " ,p , "rho: ", rho, "sigma: ", sigma, ", n:", n, "\n")
 # 
 #          test_predictions <-
 #            compute_test_predictions_under_settings(n, error_distribution_type = "norm",
 #                                                error_distribution_params = sigma,
 #                                                n_test = n_test, test_data = test_data,
-#                                                x_mean = x_mean, x_sd = x_sd, rho = rho,
+#                                                x_mean = x_mean, x_sd = x_sd, rho = rho, p = p,
 #                                                bias_correction_val_size = 0.7, sample = 100)
-#   
+# 
 #          errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
-#   
-#          errors_normal <- rbind(errors_normal, data.frame("p" = length(true_coefs_x)-1,
+# 
+#          errors_normal <- rbind(errors_normal, data.frame("p" = p,
 #                                                           "rho"= rho,
 #                                                           "n" = n,
 #                                                           "sigma" = sigma,
@@ -339,11 +359,69 @@ sigmas <- c(0.001, 0.01, 0.1)
 ```
 
 
+```{r}
+run_par <- function(p, rho, sigma) {
+    errors_par <- data.frame()
+    
+    test_data <- randomize_data(n_test, error_distribution_type = "norm",
+                                error_distribution_params = sigma,
+                                x_mean = x_mean, x_sd = x_sd,p = p, rho = rho)
+     for (n in ns) {
+
+
+     cat("p: " ,p, "rho: ", rho, "sigma: ", sigma, ", n:", n, "\n")
+
+         test_predictions <-
+           compute_test_predictions_under_settings(n, error_distribution_type = "norm",
+                                               error_distribution_params = sigma,
+                                               n_test = n_test, test_data = test_data,
+                                               x_mean = x_mean, x_sd = x_sd, rho = rho,p=p,
+                                               bias_correction_val_size = 0.7, sample = 100)
+
+         errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
+
+         
+         
+         errors_par <- rbind(errors_par, data.frame("p" = p,
+                                                          "rho"= rho,
+                                                          "n" = n,
+                                                          "sigma" = sigma,
+                                                          errors))
+        
+     }
+    return (errors_par)
+  
+}
+```
+
+
+```{r}
+#setup parallel backend to use many processors
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+packages = c("dplyr", "quantreg", "isotone", "sqldf", "knitr", "reshape", "reshape2")
+
+errors_normal <- data.frame()
+
+errors_normal <- 
+  foreach(p = ps, .packages=packages, .combine=rbind) %:% 
+  foreach(rho = rhos, .packages=packages, .combine=rbind) %:%  
+  foreach(sigma = sigmas, .packages=packages, .combine=rbind) %dopar% {
+      errors = run_par(p, rho, sigma)
+      errors
+  }
+write.csv(errors_normal, "outputs/errors_normal.csv", row.names=FALSE)
+
+stopCluster(cl)    
+```
+
+
 
 ```{r}
 # errors_normal <- read.csv("outputs/errors_normal.csv", sep =",")
 ```
-
 
 
 
@@ -364,31 +442,31 @@ scales <- c(0.5,1,1.5)
 ```{r}
 errors_weibull <- data.frame()
 
-for (true_coefs_x in true_coefs_xs) {
+for (p in ps) {
   for (rho in rhos) {
     for (shape in shapes) {
       for (scale in scales) {
 
         test_data <- randomize_data(n_test, error_distribution_type = "weibull",
                       error_distribution_params = c(shape, scale),
-                      x_mean = x_mean, x_sd = x_sd, true_coefs_x = true_coefs_x,rho = rho)
+                      x_mean = x_mean, x_sd = x_sd,rho = rho, p=p)
 
         for (n in ns) {
 
-            cat("p: " ,length(true_coefs_x)-1, "rho: ", rho,  "shape: ", 
+            cat("p: " ,p, "rho: ", rho,  "shape: ", 
                 shape, " scale:", scale, ", n:", n, "\n")
   
             test_predictions <-
               compute_test_predictions_under_settings(n, error_distribution_type = "weibull",
                                                   error_distribution_params = c(shape, scale),
                                                   n_test = n_test, test_data = test_data,
-                                                  x_mean = x_mean, x_sd = x_sd, rho = rho,
+                                                  x_mean = x_mean, x_sd = x_sd, rho = rho, p =p ,
                                                   bias_correction_val_size = 0.7, sample = 100)
   
             errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
   
             errors_weibull <- rbind(errors_weibull,
-                                    data.frame("p" = length(true_coefs_x)-1,
+                                    data.frame("p" = p,
                                                "rho"= rho,
                                                "n" = n,
                                                "shape" = shape,
@@ -430,26 +508,26 @@ dfs <- c(1, 3, 10)
 ```{r}
 errors_t <- data.frame()
 
-for (true_coefs_x in true_coefs_xs) {
+for (p in ps) {
   for (rho in rhos) {
     for (df in dfs) {
         test_data <- randomize_data(n_test, error_distribution_type = "t", error_distribution_params = df,
-                          x_mean = x_mean, x_sd = x_sd, true_coefs_x = true_coefs_x, rho=rho)
+                          x_mean = x_mean, x_sd = x_sd, rho=rho, p=p)
         for (n in ns) {
             
-          cat( "p: " ,length(true_coefs_x)-1, "rho: ", rho,  "df: ", df, ", n:", n, "\n")
+          cat( "p: " ,p, "rho: ", rho,  "df: ", df, ", n:", n, "\n")
             
             test_predictions <-
               compute_test_predictions_under_settings(n, error_distribution_type = "t",
                                                       error_distribution_params = df,
                                                       n_test = n_test, test_data = test_data,
-                                                      x_mean = x_mean, x_sd = x_sd, rho = rho,
+                                                      x_mean = x_mean, x_sd = x_sd, rho = rho, p=p,
                                                       bias_correction_val_size = 0.7, sample = 300)
   
             errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
   
             errors_t <- rbind(errors_t,
-                                  data.frame("p" = length(true_coefs_x)-1,
+                                  data.frame("p" = p,
                                              "rho"= rho,
                                              "n" = n,
                                              "df" = df,
@@ -865,6 +943,93 @@ ggplot(all_errors %>% melt(id.vars = c(1,2,3)),
   geom_boxplot() +
   facet_grid(variable~method) +
   theme_gray()
+
+```
+
+
+## How to know when does the bias correction help
+
+
+### iid errors
+
+```{r}
+normal_melted_data_iid %>% 
+  group_by(p,rho,n,sigma,quantile,method,variable) %>% 
+  summarise(median = median(value),
+            mean = mean(value),
+            min = min(value), max = max(value),
+            sd = sd(value)) %>% 
+  filter(variable == "MSE" & quantile %in% c(0.97,0.99) & p>1) %>% 
+  select(-c(variable)) %>% 
+  dcast(p+rho+n+sigma ~ paste0('method_',method), value.var = 'median') %>% 
+  mutate("is_bias_correction_good" = 
+           ifelse(method_bias_correction < method_true, 1, 0),
+         "is_modeling_wrong_quantile_good" = 
+           ifelse(method_no_correction < method_true, 1, 0)) %>% 
+  select(-c(method_bias_correction, method_no_correction, method_true)) %>% 
+  arrange(-is_bias_correction_good)
+```
+
+
+```{r}
+t_melted_data_iid %>% 
+  group_by(p,rho,n,df,quantile,method,variable) %>% 
+  summarise(median = median(value),
+            mean = mean(value),
+            min = min(value), max = max(value),
+            sd = sd(value)) %>% 
+  filter(variable == "MSE" & quantile %in% c(0.97,0.99) & p>1) %>% 
+  select(-c(variable)) %>% 
+  dcast(p+rho+n+df ~ paste0('method_',method), value.var = 'median') %>% 
+  mutate("is_bias_correction_good" = 
+           ifelse(method_bias_correction < method_true, 1, 0),
+         "is_modeling_wrong_quantile_good" = 
+           ifelse(method_no_correction < method_true, 1, 0)) %>% 
+  select(-c(method_bias_correction, method_no_correction, method_true)) %>% 
+  arrange(-is_bias_correction_good)
+```
+
+
+
+
+```{r}
+distribution_type = "weibull"
+scale = 0.5
+location = 1
+rho=0
+
+train_data <- randomize_data(1000, distribution_type, c(scale,location),
+                             x_mean, x_sd, true_coefs_x, rho = rho)
+    
+model <- rq(y~., tau= 0.99, data = train_data)
+
+kernel <- function(x) {
+  if (abs(x)<=1) {return (0.5)}
+  else (return (0))
+}
+
+train_data$y_pred <- predict(model)
+train_data$res <- train_data$y - train_data$y_pred
+train_data$ker <- sapply(train_data$res / bandwidth, function (x) {kernel(x)})
+
+
+J_het = matrix(0, nrow=15, ncol=15)
+for (i in 1:1000) {
+  mat = as.vector(t(train_data[i,] %>% select(-c(y,y_pred,res,ker)))) %*% 
+    as.matrix(train_data[i,] %>% select(-c(y,y_pred,res,ker)))
+  
+  J_het = J_het + mat
+  
+}
+matrix_sparsity_estimator = J_het / (1000*bandwidth)
+
+
+iid_estimator = (quantile(train_data$y,0.99+bandwidth) - quantile(train_data$y,0.99-bandwidth))/(2*bandwidth)
+
+final_matrix_estimator  = solve(matrix_sparsity_estimator)
+
+summary(model, se = "nid")
+
 
 ```
 
