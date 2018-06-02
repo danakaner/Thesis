@@ -360,67 +360,67 @@ sigmas <- c(0.001, 0.01, 0.1)
 
 
 ```{r}
-run_par <- function(p, rho, sigma) {
-    errors_par <- data.frame()
-    
-    test_data <- randomize_data(n_test, error_distribution_type = "norm",
-                                error_distribution_params = sigma,
-                                x_mean = x_mean, x_sd = x_sd,p = p, rho = rho)
-     for (n in ns) {
-
-
-     cat("p: " ,p, "rho: ", rho, "sigma: ", sigma, ", n:", n, "\n")
-
-         test_predictions <-
-           compute_test_predictions_under_settings(n, error_distribution_type = "norm",
-                                               error_distribution_params = sigma,
-                                               n_test = n_test, test_data = test_data,
-                                               x_mean = x_mean, x_sd = x_sd, rho = rho,p=p,
-                                               bias_correction_val_size = 0.7, sample = 100)
-
-         errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
-
-         
-         
-         errors_par <- rbind(errors_par, data.frame("p" = p,
-                                                          "rho"= rho,
-                                                          "n" = n,
-                                                          "sigma" = sigma,
-                                                          errors))
-        
-     }
-    return (errors_par)
-  
-}
+# run_par <- function(p, rho, sigma) {
+#     errors_par <- data.frame()
+#     
+#     test_data <- randomize_data(n_test, error_distribution_type = "norm",
+#                                 error_distribution_params = sigma,
+#                                 x_mean = x_mean, x_sd = x_sd,p = p, rho = rho)
+#      for (n in ns) {
+# 
+# 
+#      cat("p: " ,p, "rho: ", rho, "sigma: ", sigma, ", n:", n, "\n")
+# 
+#          test_predictions <-
+#            compute_test_predictions_under_settings(n, error_distribution_type = "norm",
+#                                                error_distribution_params = sigma,
+#                                                n_test = n_test, test_data = test_data,
+#                                                x_mean = x_mean, x_sd = x_sd, rho = rho,p=p,
+#                                                bias_correction_val_size = 0.7, sample = 100)
+# 
+#          errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
+# 
+#          
+#          
+#          errors_par <- rbind(errors_par, data.frame("p" = p,
+#                                                           "rho"= rho,
+#                                                           "n" = n,
+#                                                           "sigma" = sigma,
+#                                                           errors))
+#         
+#      }
+#     return (errors_par)
+#   
+# }
 ```
 
 
 ```{r}
-#setup parallel backend to use many processors
-cores=detectCores()
-cl <- makeCluster(cores[1]-1) #not to overload your computer
-registerDoParallel(cl)
-
-packages = c("dplyr", "quantreg", "isotone", "sqldf", "knitr", "reshape", "reshape2")
-
-errors_normal <- data.frame()
-
-errors_normal <- 
-  foreach(p = ps, .packages=packages, .combine=rbind) %:% 
-  foreach(rho = rhos, .packages=packages, .combine=rbind) %:%  
-  foreach(sigma = sigmas, .packages=packages, .combine=rbind) %dopar% {
-      errors = run_par(p, rho, sigma)
-      errors
-  }
-write.csv(errors_normal, "outputs/errors_normal.csv", row.names=FALSE)
-
-stopCluster(cl)    
+# #setup parallel backend to use many processors
+# cores=detectCores()
+# cl <- makeCluster(cores[1]-1) #not to overload your computer
+# registerDoParallel(cl)
+# 
+# packages = c("dplyr", "quantreg", "isotone", "sqldf", "knitr", "reshape", "reshape2")
+# 
+# errors_normal <- data.frame()
+# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+# errors_normal <-
+#   foreach(p = ps, .packages=packages, .combine=rbind) %:%
+#   foreach(rho = rhos, .packages=packages, .combine=rbind) %:%
+#   foreach(sigma = sigmas, .packages=packages, .combine=rbind) %dopar% {
+#       errors = run_par(p, rho, sigma)
+#       errors
+#   }
+# write.csv(errors_normal, "outputs/errors_normal.csv", row.names=FALSE)
+# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+# stopCluster(cl)
 ```
 
 
 
 ```{r}
-# errors_normal <- read.csv("outputs/errors_normal.csv", sep =",")
+errors_normal <- read.csv("outputs/errors_normal.csv", sep =",")
 ```
 
 
@@ -435,62 +435,123 @@ e_{w}\sim weibull(shape=a,scale=b)
 
 ```{r}
 ## distribution settings
-shapes <- c(0.5,1,1.5)
-scales <- c(0.5,1,1.5)
+shapes <- c(0.5,1,2)
+scales <- c(0.5,1,2)
 ```
 
 ```{r}
 errors_weibull <- data.frame()
 
-for (p in ps) {
-  for (rho in rhos) {
-    for (shape in shapes) {
-      for (scale in scales) {
+# for (p in ps) {
+#   for (rho in rhos) {
+#     for (shape in shapes) {
+#       for (scale in scales) {
+# 
+#         test_data <- randomize_data(n_test, error_distribution_type = "weibull",
+#                       error_distribution_params = c(shape, scale),
+#                       x_mean = x_mean, x_sd = x_sd,rho = rho, p=p)
+# 
+#         for (n in ns) {
+# 
+#             cat("p: " ,p, "rho: ", rho,  "shape: ", 
+#                 shape, " scale:", scale, ", n:", n, "\n")
+#   
+#             test_predictions <-
+#               compute_test_predictions_under_settings(n, error_distribution_type = "weibull",
+#                                                   error_distribution_params = c(shape, scale),
+#                                                   n_test = n_test, test_data = test_data,
+#                                                   x_mean = x_mean, x_sd = x_sd, rho = rho, p =p ,
+#                                                   bias_correction_val_size = 0.7, sample = 100)
+#   
+#             errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
+#   
+#             errors_weibull <- rbind(errors_weibull,
+#                                     data.frame("p" = p,
+#                                                "rho"= rho,
+#                                                "n" = n,
+#                                                "shape" = shape,
+#                                                "scale" = scale,
+#                                                errors))
+# 
+#             
+# 
+#         }
+#       }
+#     }
+#   }
+# 
+# }
+# 
+# 
+# write.csv(errors_weibull, "outputs/errors_weibull.csv", row.names=FALSE)
 
-        test_data <- randomize_data(n_test, error_distribution_type = "weibull",
-                      error_distribution_params = c(shape, scale),
-                      x_mean = x_mean, x_sd = x_sd,rho = rho, p=p)
-
-        for (n in ns) {
-
-            cat("p: " ,p, "rho: ", rho,  "shape: ", 
-                shape, " scale:", scale, ", n:", n, "\n")
-  
-            test_predictions <-
-              compute_test_predictions_under_settings(n, error_distribution_type = "weibull",
-                                                  error_distribution_params = c(shape, scale),
-                                                  n_test = n_test, test_data = test_data,
-                                                  x_mean = x_mean, x_sd = x_sd, rho = rho, p =p ,
-                                                  bias_correction_val_size = 0.7, sample = 100)
-  
-            errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
-  
-            errors_weibull <- rbind(errors_weibull,
-                                    data.frame("p" = p,
-                                               "rho"= rho,
-                                               "n" = n,
-                                               "shape" = shape,
-                                               "scale" = scale,
-                                               errors))
-
-            
-
-        }
-      }
-    }
-  }
-
-}
+```
 
 
-write.csv(errors_weibull, "outputs/errors_weibull.csv", row.names=FALSE)
 
+
+```{r}
+# run_par <- function(p, rho, shape, scale) {
+#     errors_par <- data.frame()
+#     
+#     test_data <- randomize_data(n_test, error_distribution_type = "weibull",
+#                                 error_distribution_params = c(shape, scale),
+#                                 x_mean = x_mean, x_sd = x_sd,p = p, rho = rho)
+#      for (n in ns) {
+# 
+#          test_predictions <-
+#            compute_test_predictions_under_settings(n, error_distribution_type = "weibull",
+#                                                error_distribution_params = c(shape, scale),
+#                                                n_test = n_test, test_data = test_data,
+#                                                x_mean = x_mean, x_sd = x_sd, rho = rho, p = p,
+#                                                bias_correction_val_size = 0.7, sample = 100)
+# 
+#          errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
+# 
+#          errors_par <- rbind(errors_par, data.frame("p" = p,
+#                                                           "rho"= rho,
+#                                                           "n" = n,
+#                                                           "shape" = shape,
+#                                                           "scale" = scale,
+#                                                           errors))
+#         
+#      }
+#     return (errors_par)
+#   
+# }
+```
+
+
+```{r}
+# #setup parallel backend to use many processors
+# cores=detectCores()
+# cl <- makeCluster(cores[1]-1) #not to overload your computer
+# registerDoParallel(cl)
+# 
+# packages = c("dplyr", "quantreg", "isotone", "sqldf", "knitr", "reshape", "reshape2")
+# 
+# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+# 
+# errors_weibull <- data.frame()
+# errors_weibull <- 
+#   foreach(p = ps, .packages=packages, .combine=rbind) %:% 
+#   foreach(rho = rhos, .packages=packages, .combine=rbind) %:%  
+#   foreach(shape = shapes, .packages=packages, .combine=rbind) %:% 
+#   foreach(scale = scales, .packages=packages, .combine=rbind) %dopar% {
+#       errors = run_par(p, rho, shape, scale)
+#       errors
+#   }
+# 
+# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+# write.csv(errors_weibull, "outputs/errors_weibull.csv", row.names=FALSE)
+# 
+# stopCluster(cl)    
 ```
 
 ```{r}
 errors_weibull <- read.csv("outputs/errors_weibull.csv", sep =",")
- 
 ```
+
 
 # t-distribution errors
 
@@ -502,53 +563,111 @@ e_{_{t}}\sim t(df)
 
 ```{r}
 ## distribution settings
-dfs <- c(1, 3, 10)
+dfs <- c(1, 2, 3, 10)
 ```
 
 ```{r}
-errors_t <- data.frame()
+# errors_t <- data.frame()
+# 
+# for (p in ps) {
+#   for (rho in rhos) {
+#     for (df in dfs) {
+#         test_data <- randomize_data(n_test, error_distribution_type = "t", error_distribution_params = df,
+#                           x_mean = x_mean, x_sd = x_sd, rho=rho, p=p)
+#         for (n in ns) {
+#             
+#           cat( "p: " ,p, "rho: ", rho,  "df: ", df, ", n:", n, "\n")
+#             
+#             test_predictions <-
+#               compute_test_predictions_under_settings(n, error_distribution_type = "t",
+#                                                       error_distribution_params = df,
+#                                                       n_test = n_test, test_data = test_data,
+#                                                       x_mean = x_mean, x_sd = x_sd, rho = rho, p=p,
+#                                                       bias_correction_val_size = 0.7, sample = 100)
+#   
+#             errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
+#   
+#             errors_t <- rbind(errors_t,
+#                                   data.frame("p" = p,
+#                                              "rho"= rho,
+#                                              "n" = n,
+#                                              "df" = df,
+#                                              errors))
+#           
+#         }
+#     }
+#   }
+# }
 
-for (p in ps) {
-  for (rho in rhos) {
-    for (df in dfs) {
-        test_data <- randomize_data(n_test, error_distribution_type = "t", error_distribution_params = df,
-                          x_mean = x_mean, x_sd = x_sd, rho=rho, p=p)
-        for (n in ns) {
-            
-          cat( "p: " ,p, "rho: ", rho,  "df: ", df, ", n:", n, "\n")
-            
-            test_predictions <-
-              compute_test_predictions_under_settings(n, error_distribution_type = "t",
-                                                      error_distribution_params = df,
-                                                      n_test = n_test, test_data = test_data,
-                                                      x_mean = x_mean, x_sd = x_sd, rho = rho, p=p,
-                                                      bias_correction_val_size = 0.7, sample = 300)
-  
-            errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
-  
-            errors_t <- rbind(errors_t,
-                                  data.frame("p" = p,
-                                             "rho"= rho,
-                                             "n" = n,
-                                             "df" = df,
-                                             errors))
-          
-        }
-    }
-  }
-}
+# write.csv(errors_t, "outputs/errors_t.csv", row.names=FALSE)
+```
 
-write.csv(errors_t, "outputs/errors_t.csv", row.names=FALSE)
+
+
+```{r}
+# run_par <- function(p, rho, df) {
+#     errors_par <- data.frame()
+#     
+#     test_data <- randomize_data(n_test, error_distribution_type = "t",
+#                                 error_distribution_params = df,
+#                                 x_mean = x_mean, x_sd = x_sd,p = p, rho = rho)
+#      for (n in ns) {
+# 
+# 
+#      cat("p: " ,p, "rho: ", rho, "df: ", df, ", n:", n, "\n")
+# 
+#          test_predictions <-
+#            compute_test_predictions_under_settings(n, error_distribution_type = "t",
+#                                                error_distribution_params = df,
+#                                                n_test = n_test, test_data = test_data,
+#                                                x_mean = x_mean, x_sd = x_sd, rho = rho,p=p,
+#                                                bias_correction_val_size = 0.7, sample = 100)
+# 
+#          errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
+# 
+#          
+#          
+#          errors_par <- rbind(errors_par, data.frame("p" = p,
+#                                                           "rho"= rho,
+#                                                           "n" = n,
+#                                                           "df" = df,
+#                                                           errors))
+#         
+#      }
+#     return (errors_par)
+#   
+# }
+```
+
+
+```{r}
+# #setup parallel backend to use many processors
+# cores=detectCores()
+# cl <- makeCluster(cores[1]-1) #not to overload your computer
+# 
+# registerDoParallel(cl)
+# 
+# packages = c("dplyr", "quantreg", "isotone", "sqldf", "knitr", "reshape", "reshape2")
+# 
+# errors_t <- data.frame()
+# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+# errors_t <- 
+#   foreach(p = ps, .packages=packages, .combine=rbind) %:% 
+#   foreach(rho = rhos, .packages=packages, .combine=rbind) %:%  
+#   foreach(df = dfs, .packages=packages, .combine=rbind) %dopar% {
+#       errors = run_par(p, rho, df)
+#       errors
+#   }
+# write.csv(errors_t, "outputs/errors_t.csv", row.names=FALSE)
+# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+# stopCluster(cl)    
 ```
 
 ```{r}
 errors_t <- read.csv("outputs/errors_t.csv", sep =",")
 ```
 
-
-
 # Application
-
 
 
 ```{r, message=FALSE, warning=FALSE}
@@ -622,16 +741,16 @@ ui <- fluidPage(
                     selected = "norm"),
         
         radioButtons("rho", h5("Rho"), 
-                    choices = list(0,1),
+                    choices = rhos,
                     selected = 0),
         
         radioButtons("p", h5("P"), 
-                    choices = list(1,8,15),
+                    choices = ps,
                     selected = 1),
 
         
         checkboxGroupInput("taus_wrong", h5("Wrong quantiles"), 
-                    choices = list(0.95,0.97),
+                    choices = taus_wrong,
                     selected = 0.97),
         
         radioButtons("method", h5("Methods to show"), 
@@ -641,23 +760,23 @@ ui <- fluidPage(
                     selected = "Modeling wrong quantiles"),
         
         checkboxGroupInput("n", h5("Train set size"),
-                       choices = c(125,250,500,1000), selected = c(125,250,500,1000)))),
+                       choices = ns, selected = ns))),
   
   ## distribution parameters
     sidebarPanel(
             width = 3,
             h3("Distribution Parameters"),
             radioButtons("sigma", h5("Sigma"),
-                 choices = c(0.001, 0.01, 0.1), selected = 0.001),
+                 choices = sigmas, selected = 0.001),
             radioButtons("df", h5("Degreed of freedom"),
-                 choices = c(1,3,10), selected = 1),
+                 choices = dfs, selected = 1),
             
             splitLayout(
 
             radioButtons("shape", h5("Shape"),
-                 choices = c(0.5,1,1.5), selected = 1),
+                 choices = shapes, selected = 1),
             radioButtons("scale", h5("Scale"),
-                 choices = c(0.5,1,1.5), selected = 1)
+                 choices = scales, selected = 1)
             
             )
 
