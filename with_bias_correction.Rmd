@@ -23,6 +23,7 @@ library(reshape2)
 library(ggplot2) 
 library(grid) 
 library(gridExtra)
+library(cowplot)
 library(lattice) 
 library(knitr) 
 library(latex2exp)
@@ -440,7 +441,7 @@ scales <- c(0.5,1,2)
 ```
 
 ```{r}
-errors_weibull <- data.frame()
+# errors_weibull <- data.frame()
 
 # for (p in ps) {
 #   for (rho in rhos) {
@@ -876,7 +877,7 @@ server <- function(input, output) {
   })
    
      
-   distribution_func_data <- reactive({
+   errors_dist_data <- reactive({
      
       data <- filtered_data_by_params() %>% 
            filter(variable == "MSE" & quantile == tau_true & 
@@ -892,22 +893,34 @@ server <- function(input, output) {
       return (data_frame(x = dist))
    })
  
-   
+   # y_x_data <- reactive({
+   #   ## show y~x for p=1
+   #  ## not working
+   #   
+   #   error_distribution_params_input <- ifelse(input$distribution == "norm", 
+   #                                       max(input$sigma), 
+   #                                       ifelse(input$distribution == "weibull",
+   #                                              c(max(input$shape), max(input$scale)),
+   #                                              max(input$df)))
+   # 
+   #   randomized_data <- randomize_data(n = max(input$n), 
+   #                          error_distribution_type = input$distribution, 
+   #                          error_distribution_params = error_distribution_params_input, 
+   #                          x_mean = x_mean, x_sd = x_sd, rho = max(input$rho), p = 1)
+   # 
+   #   return (randomized_data)
+   #   
+   # })
+  
      output$density <- renderPlot({
-        
-        dens <- 
-          ggplot(distribution_func_data(), aes(x)) +
-        geom_density(col = "cornflowerblue", fill = "cornflowerblue", alpha = 0.7) +
-        labs(x = "residual value", y = "density") +
-        theme_grey() 
-        
-        hist <-
-          ggplot(distribution_func_data(), aes(x)) +
-        geom_histogram(col = "cornflowerblue", fill = "cornflowerblue", alpha = 0.7, bins = 100) +
+
+        ggplot(errors_dist_data(), aes(x)) +
+        geom_histogram(col = "cornflowerblue", 
+                       fill = "cornflowerblue", alpha = 0.7, bins = 100) +
         labs(x = "residual value", y = "count") +
-        theme_grey() 
+        theme_grey()  
         
-        grid.arrange(dens, hist, ncol = 2)
+        # grid.arrange(hist, dist, ncol = 2)
      })
      
   
@@ -919,6 +932,16 @@ server <- function(input, output) {
         geom_boxplot(col = "#585858", outlier.size = 0.1)+
         facet_wrap(~ variable) + #scales="free"
         labs(x = "n", y = "log(value+1)", fill = "Quantile") +
+        # scale_colour_manual(values = c("0.95" = "#9BC01C", 
+        #                                "0.95_corrected" = "#C3E05E",
+        #                                "0.97" = "#F52549", 
+        #                                "0.97_corrected" = "#FA6775",
+        #                                "0.99" = "#f48d38"))+
+        # scale_fill_manual(values = c("0.95" = "#9BC01C", 
+        #                                "0.95_corrected" = "#C3E05E",
+        #                                "0.97" = "#F52549", 
+        #                                "0.97_corrected" = "#FA6775",
+        #                                "0.99" = "#f48d38"))+
         scale_fill_brewer(palette="Paired") +
         theme_grey() +
         theme(legend.position = "bottom")
@@ -928,6 +951,8 @@ server <- function(input, output) {
 
 
 }
+
+
 ```
 
 ## run app
@@ -942,58 +967,78 @@ shinyApp(ui = ui, server = server)
 
 ## Normal Distribution
 
-```{r, fig.height=6, fig.width=12}
-ggplot(normal_melted_data_iid %>% 
-       dplyr::filter((p %in% c(1,5,10,20)) & (sigma == 0.1) & (rho==0) 
-                     & (quantile %in% c(0.93, 0.95,0.97,0.99))
-                     & (n %in% c(125,250,500,1000,2000)) 
-                     & (variable == "MSE")),
-       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quantile)))+
+```{r, fig.height=12, fig.width=12}
+iid <- ggplot(normal_melted_data_iid %>% 
+       dplyr::filter((p %in% c(15)) & (sigma == 0.1)  
+                     & (quantile %in% c(0.97,0.99))
+                     & (n %in% ns)),
+       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quntile_final)))+
 geom_boxplot(inherit.aes = T, 
              col = "#585858", outlier.size = 0.15)+
-facet_grid(~p, scales = "free") + 
-labs(x = "n", y = "log(value+1)", 
-     title = "MSE for normal distribution", subtitle = "Over a range of p") +
+facet_grid(~variable, scales = "free") + 
+labs(x = "n", y = "log(value+1)", fill = "Method") +
+scale_fill_brewer(palette="Paired") +
+ # theme_light() +
+theme_grey() +
+theme(legend.position = "None")
+
+  
+het <- 
+  ggplot(normal_melted_data_het %>% 
+       dplyr::filter((p %in% c(15)) & (sigma == 0.1)  
+                     & (quantile %in% c(0.97,0.99))
+                     & (n %in% ns)),
+       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quntile_final)))+
+geom_boxplot(inherit.aes = T, 
+             col = "#585858", outlier.size = 0.15)+
+facet_grid(~variable, scales = "free") + 
+labs(x = "n", y = "log(value+1)", fill = "Method") +
 scale_fill_brewer(palette="Paired") +
  # theme_light() +
 theme_grey() +
 theme(legend.position = "bottom")
 
-```
 
+grid.arrange(arrangeGrob(iid, top="Location model"), 
+             arrangeGrob(het, top="Scale-location model"), 
+             nrow = 2, heights = c(0.47,0.53))
+```
 
 ```{r, fig.height=12, fig.width=12}
-ggplot(normal_melted_data_iid %>% 
-       dplyr::filter((p %in% c(1)) & (sigma %in% c(0.001,0.1,1)) & (rho==0) 
-                     & (quantile %in% c(0.93, 0.95,0.97,0.99))
-                     & (n %in% c(125,250,500,1000,2000))),
-       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quantile)))+
+ggplot(t_melted_data_iid %>% 
+       dplyr::filter((p %in% c(15)) & (df %in% dfs)  
+                     & (quantile %in% c(0.97,0.99))
+                     & (n %in% ns)),
+       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quntile_final)))+
 geom_boxplot(inherit.aes = T, 
              col = "#585858", outlier.size = 0.15)+
-facet_grid(sigma~variable, scales = "free") + 
-labs(x = "n", y = "log(value+1)", 
-     title = "MSE for normal iid errors", subtitle = "Over a range of p",
-     fill = "Quantile") +
+facet_grid(df~variable, scales = "free") + 
+labs(x = "n", y = "log(value+1)", fill = "Method") +
 scale_fill_brewer(palette="Paired") +
+ # theme_light() +
 theme_grey() +
-theme(legend.position = "bottom")
+theme(legend.position = "None")
 
-
-ggplot(normal_melted_data_het %>% 
-       dplyr::filter((p %in% c(1)) & (sigma %in% c(0.001,0.1,1)) & (rho==1) 
-                     & (quantile %in% c(0.93, 0.95,0.97,0.99))
-                     & (n %in% c(125,250,500,1000,2000))),
-       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quantile)))+
-geom_boxplot(inherit.aes = T, 
-             col = "#585858", outlier.size = 0.15)+
-facet_grid(sigma~variable, scales = "free") + 
-labs(x = "n", y = "log(value+1)", 
-     title = "MSE for normal hetrogenous errors", subtitle = "Over a range of p",
-     fill = "Quantile") +
-scale_fill_brewer(palette="Paired") +
-theme_grey() +
-theme(legend.position = "bottom")
 ```
+
+
+```{r, fig.height=8, fig.width=12}
+ggplot(weibull_melted_data_iid %>% 
+       dplyr::filter((p == 15) & (shape %in% shapes) & (scale ==1)  
+                     & (quantile %in% c(0.97,0.99))
+                     & (n %in% ns) ),
+       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quntile_final)))+
+geom_boxplot(inherit.aes = T, 
+             col = "#585858", outlier.size = 0.15)+
+facet_grid(shape~variable, scales = "free") + 
+labs(x = "n", y = "log(value+1)", fill = "Method") +
+scale_fill_brewer(palette="Paired") +
+ # theme_light() +
+theme_grey() +
+theme(legend.position = "None")
+
+```
+
 
 # Bias correction
 
