@@ -23,7 +23,6 @@ library(reshape2)
 library(ggplot2) 
 library(grid) 
 library(gridExtra)
-library(cowplot)
 library(lattice) 
 library(knitr) 
 library(latex2exp)
@@ -1070,4 +1069,115 @@ summary(model, se = "nid")
 
 
 ```
+
+
+# Variance Expression simulations 
+
+## Variance for quantile tau
+
+Let $\frac{1}2<<\tau<1$, and we'll look at $\theta(\tau)=\frac{\tau(1-\tau)}{f^2(\xi(\tau))}$ as a function of $\tau$.
+
+
+### normal dist:
+
+$$\frac{\tau\left(1-\tau\right)}{\tau_{w}\left(1-\tau_{w}\right)}\leq exp\left\{ \left(\left(\varPhi^{-1}\right)^{2}\left(\tau_{w}\right)-\left(\varPhi^{-1}\right)^{2}\left(\tau\right)\right)\right\} $$
+
+invented dist:
+$$f_{\epsilon}\left(u\right)=\left|u\right|, -1<u<1$$
+
+$$\frac{\tau\left(1-\tau\right)}{\tau_{w}\left(1-\tau_{w}\right)}\leq\frac{2\tau-1}{2\tau_{w}-1}$$
+
+
+```{r, message=FALSE, warning=FALSE}
+true_tau <- 0.99
+
+results = data.frame(wrong_tau = NA, dist = NA, right = NA, left = NA)
+
+for (wrong_tau in seq(0.5, true_tau, by = 0.005)) {
+  
+  mult_true <- true_tau*(1-true_tau)
+  mult_wrong <- wrong_tau*(1-wrong_tau)
+
+  quan_true <- qnorm(true_tau)
+  quan_wrong <- qnorm(wrong_tau)
+
+  right <- exp(quan_wrong^2 - quan_true^2)
+  left <- mult_true/mult_wrong
+  
+  current <- data.frame(wrong_tau = wrong_tau, 
+                        dist = "Normal Density",
+                        right = right, 
+                        left = left)
+  results <- rbind(results, current)
+}
+
+
+for (wrong_tau in seq(0.5, true_tau, by = 0.005)) {
+  
+  mult_true <- true_tau*(1-true_tau)
+  mult_wrong <- wrong_tau*(1-wrong_tau)
+
+  quan_true <- 2*true_tau - 1
+  quan_wrong <- 2*wrong_tau - 1
+
+  right <- quan_wrong / quan_true
+  left <- mult_true/mult_wrong
+  
+  current <- data.frame(wrong_tau = wrong_tau, 
+                        dist =  "Absolute Value Density",
+                        right = right, 
+                        left = left)
+  results <- rbind(results, current)
+}
+```
+
+```{r, fig.height=8, fig.width=12}
+ggplot(results[-1,] %>% melt(id = c('wrong_tau','dist')), 
+       aes(x = wrong_tau, y= value, color = variable)) +
+geom_point(size = 2) +
+xlab(TeX('$\\tau_{w}$')) +
+guides(color = guide_legend(title=NULL)) +
+scale_color_discrete(labels = lapply(c('$\\left(\\Phi^{-1}\\right)^{2}\\left(\\tau_{w}\\right)-\\left(\\Phi^{-1}\\right)^{2}\\left(\\tau\\right)$',                                 '$\\frac{\\tau\\left(1-\\tau\\right)}{\\tau_{w}\\left(1-\\tau_{w}\\right)}$'), TeX)) +
+  theme_grey()+
+  theme(legend.position = "bottom") +
+  facet_wrap(~dist)
+```
+
+
+
+### for our invented distribution
+
+
+```{r, fig.width=16, message=FALSE, warning=FALSE}
+
+
+norm<-ggplot(results[-1,] %>% melt(id = 'wrong_tau'), 
+       aes(x = wrong_tau, y= value, color = variable)) +
+geom_point(size = 2) +
+# ggtitle(TeX('Variance Elements - The Normal Distribution Density'),
+#         subtitle = TeX('$\\tau = 0.99$ and $0.5<\\tau_{w}<0.99$'))+
+xlab(TeX('$\\tau_{w}$')) +
+guides(color = guide_legend(title=NULL)) +
+scale_color_discrete(labels = lapply(c('$\\left(\\Phi^{-1}\\right)^{2}\\left(\\tau_{w}\\right)-\\left(\\Phi^{-1}\\right)^{2}\\left(\\tau\\right)$',                                 '$\\frac{\\tau\\left(1-\\tau\\right)}{\\tau_{w}\\left(1-\\tau_{w}\\right)}$'), TeX)) +
+  theme_grey()+
+  theme(legend.position = "None") 
+  
+
+invented<-ggplot(results[-1,] %>% melt(id = 'wrong_tau'), 
+       aes(x = wrong_tau, y= value, color = variable)) +
+geom_point(size = 2) +
+# ggtitle(TeX('Variance Elements - The Absolute Value density'),
+#         subtitle = TeX('$\\tau = 0.99$ and $0.5<\\tau_{w}<0.99$')) +
+xlab(TeX('$\\tau_{w}$')) +
+guides(color = guide_legend(title=NULL)) +
+scale_color_discrete(labels = lapply(c('$\\left(\\Phi^{-1}\\right)^{2}\\left(\\tau_{w}\\right)-\\left(\\Phi^{-1}\\right)^{2}\\left(\\tau\\right)$',                                 '$\\frac{\\tau\\left(1-\\tau\\right)}{\\tau_{w}\\left(1-\\tau_{w}\\right)}$'), TeX))+
+  theme_grey()
+  # +theme(legend.position = "None")
+
+
+grid.arrange( grobs = list(norm, invented), ncol =2,  widths = c(5.3,6.7))
+help(legend)
+
+```
+
 
