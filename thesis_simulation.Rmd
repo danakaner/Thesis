@@ -136,7 +136,7 @@ compute_conditional_quantile_line <- function(tau_true, error_distribution_type,
 ```{r}
 compute_test_predictions_under_settings <- function(n, error_distribution_type, error_distribution_params,
                                                 n_test, test_data, x_mean, x_sd, rho = 0, p, power = 1, 
-                                                bias_correction_val_size = 0.7,
+                                                bias_correction_val_size = 0.8,
                                                 true_coefs_x = NULL, sample_size = 1000) {
   
   if (is.null(p)) {
@@ -170,8 +170,10 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
                                  x_mean = x_mean, x_sd = x_sd, rho = rho, p = p, 
                                  power = power, true_coefs_x = true_coefs_x) 
     
-    bs <- 30
+    bs <- 25
+    n_folds <- 5
     len <- length(train_data$y)
+    folds <- createFolds(train_data$y, k = n_folds)
     
     ## fit models for all taus
     for (i in 0:(length(all_taus)-1)) {
@@ -212,27 +214,27 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
          
          ## bias_correction - second method  
          step_mean_test <- rep(0, length(test_data$y))
-         for (b in 1:bs) {
-            new_train_data <- sample_n(train_data, len, replace = T)
+         for (fold in 1:n_folds) {
+           
+            small_train_data <- train_data[-folds[[k]],]
+            small_eval_data <- train_data[folds[[k]],]
             
-            small_train_data <- sample_n(new_train_data, (bias_correction_val_size*len), replace = F)
-            small_eval_data <- sqldf("select * from new_train_data except select * from small_train_data")
-
             fit_small_train <- rq(y ~ ., tau = all_taus[(i+1)], data = small_train_data)
             predict_on_val <- predict(fit_small_train, small_eval_data) 
             
             res_p <- gpava(z = predict_on_val, y = small_eval_data$y, 
-                       solver = weighted.fractile, p = tau_true)
-          
+                        solver = weighted.fractile, p = tau_true)
+           
             step_function <- stepfun(x = sort(res_p$z),y = sort(c(min(res_p$x),res_p$x)))
             
             step_mean_test <- step_mean_test + step_function(predict)
+
             
          }
          test_predictions_bagged_isotonic[((n_test*(i))+1):(n_test*(i+1)),1] <- rep(all_taus[(i+1)],n_test)
          test_predictions_bagged_isotonic[((n_test*(i))+1):(n_test*(i+1)),2] <- true_quan_line_on_test
          test_predictions_bagged_isotonic[((n_test*(i))+1):(n_test*(i+1)),3] <- rep("bias_correction_two",n_test)
-         test_predictions_bagged_isotonic[((n_test*(i))+1):(n_test*(i+1)),(sample+3)] <- (step_mean_test/bs)
+         test_predictions_bagged_isotonic[((n_test*(i))+1):(n_test*(i+1)),(sample+3)] <- (step_mean_test/n_folds)
 
     }
   
