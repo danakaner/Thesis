@@ -214,7 +214,7 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
          
          ## bias_correction - second method  
          step_mean_test <- rep(0, length(test_data$y))
-         for (fold in 1:n_folds) {
+         for (k in 1:n_folds) {
            
             small_train_data <- train_data[-folds[[k]],]
             small_eval_data <- train_data[folds[[k]],]
@@ -385,107 +385,27 @@ run_par <- function(p, power, rho, sigma) {
 
 
 ```{r}
-# #setup parallel backend to use many processors
-# cores=detectCores()
-# cl <- makeCluster(cores[1]-1) #not to overload your computer
-# registerDoParallel(cl)
-# 
-# 
-# 
-# errors_normal <- data.frame()
-# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
-# errors_normal <-
-#   foreach(p = ps, .packages=packages, .combine=rbind) %:%
-#   foreach(rho = rhos, .packages=packages, .combine=rbind) %:%
-#   foreach(power = powers, .packages=packages, .combine=rbind) %:%
-#   foreach(sigma = sigmas, .packages=packages, .combine=rbind) %dopar% {
-#       errors = run_par(p,power, rho, sigma)
-#       errors
-#   }
-# 
-# write.csv(errors_normal, "relative_and_cv_corrections_outputs/errors_normal.csv", row.names=FALSE)
-# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
-# stopCluster(cl)
-```
+#setup parallel backend to use many processors
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
 
 
 
-```{r}
-errors_normal <- read.csv("relative_and_cv_corrections_outputs/errors_normal.csv", sep =",")
-```
+errors_normal <- data.frame()
+strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+errors_normal <-
+  foreach(p = ps, .packages=packages, .combine=rbind) %:%
+  foreach(rho = rhos, .packages=packages, .combine=rbind) %:%
+  foreach(power = powers, .packages=packages, .combine=rbind) %:%
+  foreach(sigma = sigmas, .packages=packages, .combine=rbind) %dopar% {
+      errors = run_par(p,power, rho, sigma)
+      errors
+  }
 
-
-
-# Weibull errors
-
-$$\begin{cases}
-y^{(3)}=a+bx+e_{w}\\
-\\
-e_{w}\sim weibull(shape=a,scale=b)
-\end{cases}$$
-
-
-```{r}
-run_par <- function(p,power, rho, shape, scale) {
-    errors_par <- data.frame()
-
-    test_data <- randomize_data(n_test, error_distribution_type = "weibull",
-                                error_distribution_params = c(shape, scale),
-                                x_mean = x_mean, x_sd = x_sd,p = p,power=power, rho = rho)
-     for (n in ns) {
-
-         test_predictions <-
-           compute_test_predictions_under_settings(n, error_distribution_type = "weibull",
-                                               error_distribution_params = c(shape, scale),
-                                               n_test = n_test, test_data = test_data,
-                                               x_mean = x_mean, x_sd = x_sd, rho = rho, 
-                                               p = p, power = power,
-                                               sample = 100)
-
-         errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
-
-         errors_par <- rbind(errors_par, data.frame("p" = p, 
-                                                    "power" = power,
-                                                    "rho"= rho,
-                                                    "n" = n,
-                                                    "shape" = shape,
-                                                    "scale" = scale,
-                                                    errors))
-
-     }
-    return (errors_par)
-
-}
-```
-
-
-```{r}
-# #setup parallel backend to use many processors
-# cores=detectCores()
-# cl <- makeCluster(cores[1]-1) #not to overload your computer
-# registerDoParallel(cl)
-# # 
-# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
-# 
-# errors_weibull <- data.frame()
-# errors_weibull <-
-#   foreach(p = ps, .packages=packages, .combine=rbind) %:%
-#   foreach(rho = rhos, .packages=packages, .combine=rbind) %:%
-#   foreach(power = powers, .packages=packages, .combine=rbind) %:%
-#   foreach(shape = shapes, .packages=packages, .combine=rbind) %:%
-#   foreach(scale = scales, .packages=packages, .combine=rbind) %dopar% {
-#       errors = run_par(p, power,rho, shape, scale)
-#       errors
-#   }
-# 
-# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
-# write.csv(errors_weibull, "relative_and_cv_corrections_outputs/errors_weibull.csv", row.names=FALSE)
-# 
-# stopCluster(cl)
-```
-
-```{r}
-# errors_weibull <- read.csv("relative_and_cv_corrections_outputs/outputs/errors_weibull.csv", sep =",")
+write.csv(errors_normal, "relative_and_cv_corrections_outputs/errors_normal.csv", row.names=FALSE)
+strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+stopCluster(cl)
 ```
 
 
@@ -532,30 +452,96 @@ run_par <- function(p, power,rho, df) {
 
 
 ```{r}
-# #setup parallel backend to use many processors
-# cores=detectCores()
-# cl <- makeCluster(cores[1]-1) #not to overload your computer
-# registerDoParallel(cl)
-# 
-# 
-# errors_t <- data.frame()
-# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
-# errors_t <-
-#   foreach(p = ps, .packages=packages, .combine=rbind) %:%
-#   foreach(rho = rhos, .packages=packages, .combine=rbind) %:%
-#   foreach(power = powers, .packages=packages, .combine=rbind) %:%
-#   foreach(df = dfs, .packages=packages, .combine=rbind) %dopar% {
-#       errors = run_par(p, power,rho, df)
-#       errors
-#   }
-# write.csv(errors_t, "relative_and_cv_corrections_outputs/errors_t.csv", row.names=FALSE)
-# strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
-# stopCluster(cl)
+#setup parallel backend to use many processors
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+
+errors_t <- data.frame()
+strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+errors_t <-
+  foreach(p = ps, .packages=packages, .combine=rbind) %:%
+  foreach(rho = rhos, .packages=packages, .combine=rbind) %:%
+  foreach(power = powers, .packages=packages, .combine=rbind) %:%
+  foreach(df = dfs, .packages=packages, .combine=rbind) %dopar% {
+      errors = run_par(p, power,rho, df)
+      errors
+  }
+write.csv(errors_t, "relative_and_cv_corrections_outputs/errors_t.csv", row.names=FALSE)
+strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+stopCluster(cl)
 ```
 
+
+# Weibull errors
+
+$$\begin{cases}
+y^{(3)}=a+bx+e_{w}\\
+\\
+e_{w}\sim weibull(shape=a,scale=b)
+\end{cases}$$
+
+
 ```{r}
-errors_t <- read.csv("relative_and_cv_corrections_outputs/errors_t.csv", sep =",")
+run_par <- function(p,power, rho, shape, scale) {
+    errors_par <- data.frame()
+
+    test_data <- randomize_data(n_test, error_distribution_type = "weibull",
+                                error_distribution_params = c(shape, scale),
+                                x_mean = x_mean, x_sd = x_sd,p = p,power=power, rho = rho)
+     for (n in ns) {
+
+         test_predictions <-
+           compute_test_predictions_under_settings(n, error_distribution_type = "weibull",
+                                               error_distribution_params = c(shape, scale),
+                                               n_test = n_test, test_data = test_data,
+                                               x_mean = x_mean, x_sd = x_sd, rho = rho, 
+                                               p = p, power = power,
+                                               sample = 100)
+
+         errors <- compute_Bias_Var(test_predictions = test_predictions, n_test = n_test)
+
+         errors_par <- rbind(errors_par, data.frame("p" = p, 
+                                                    "power" = power,
+                                                    "rho"= rho,
+                                                    "n" = n,
+                                                    "shape" = shape,
+                                                    "scale" = scale,
+                                                    errors))
+
+     }
+    return (errors_par)
+
+}
 ```
+
+
+```{r}
+#setup parallel backend to use many processors
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+#
+strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+
+errors_weibull <- data.frame()
+errors_weibull <-
+  foreach(p = ps, .packages=packages, .combine=rbind) %:%
+  foreach(rho = rhos, .packages=packages, .combine=rbind) %:%
+  foreach(power = powers, .packages=packages, .combine=rbind) %:%
+  foreach(shape = shapes, .packages=packages, .combine=rbind) %:%
+  foreach(scale = scales, .packages=packages, .combine=rbind) %dopar% {
+      errors = run_par(p, power,rho, shape, scale)
+      errors
+  }
+
+strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
+write.csv(errors_weibull, "relative_and_cv_corrections_outputs/errors_weibull.csv", row.names=FALSE)
+
+stopCluster(cl)
+```
+
 
 
 
@@ -563,136 +549,79 @@ errors_t <- read.csv("relative_and_cv_corrections_outputs/errors_t.csv", sep =",
 
 
 ```{r}
-errors_normal_lin <-  errors_normal %>% dplyr::filter(power==1) 
-errors_normal_pow <-  errors_normal %>% dplyr::filter(power==2) 
+errors_normal <- read.csv("relative_and_cv_corrections_outputs/errors_normal.csv", sep =",")
 
-errors_weibull_lin <-  errors_weibull %>% dplyr::filter(power==1) 
-errors_weibull_pow <-  errors_weibull %>% dplyr::filter(power==2) 
+errors_t <- read.csv("relative_and_cv_corrections_outputs/errors_t.csv", sep =",")
 
-errors_t_lin <-  errors_t %>% dplyr::filter(power==1) 
-errors_t_pow <-  errors_t %>% dplyr::filter(power==2) 
+errors_weibull <- read.csv("relative_and_cv_corrections_outputs/errors_weibull.csv", sep =",")
+```
 
+
+
+```{r}
+filter_to_model_shape <- function(data, power, rho, melt_num = 8 ) {
+  filtered_data <- data %>% 
+  dplyr::filter((power==power) & (rho==rho)) %>% 
+  melt(id.vars = seq(1,melt_num)) %>% 
+  mutate(quantile_final = 
+           ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"),
+                  ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
+                         quantile))) %>% 
+  select(-c(true_quan))
+  
+  return(filtered_data)
+    
+}
+```
+
+```{r}
+normal_location_shift_linear_model <- 
+  filter_to_model_shape(errors_normal, 1,0)
+
+normal_scale_location_linear_model <- 
+  filter_to_model_shape(errors_normal, 1,1)
+
+normal_location_shift_quadratic_model <- 
+  filter_to_model_shape(errors_normal, 2,0)
+
+normal_scale_location_quadratic_model <- 
+  filter_to_model_shape(errors_normal, 2,1)
 ```
 
 
 ```{r}
-normal_lin_melted_data_iid <- 
-  errors_normal_lin %>% 
-  dplyr::filter(rho==0) %>% 
-  melt(id.vars = seq(1,8)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>% 
-  select(-c(true_quan))
+t_location_shift_linear_model <- 
+    filter_to_model_shape(errors_t, 1,0)
+
+t_scale_location_linear_model <- 
+  filter_to_model_shape(errors_t, 1,1)
+
+t_location_shift_quadratic_model <- 
+  filter_to_model_shape(errors_t, 2,0)
+
+t_scale_location_quadratic_model <- 
+  filter_to_model_shape(errors_t, 2,1)
+```
 
 
-normal_lin_melted_data_het <- 
-  errors_normal_lin %>% 
-  dplyr::filter(rho==1) %>% 
-  melt(id.vars = seq(1,8)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>% 
-  select(-c(true_quan))
+```{r}
+weibull_location_shift_linear_model <- 
+    filter_to_model_shape(errors_weibull, 1,0, melt_num = 9)
 
-normal_pow_melted_data_iid <- 
-  errors_normal_pow %>% 
-  dplyr::filter(rho==0) %>% 
-  melt(id.vars = seq(1,8)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>% 
-  select(-c(true_quan))
+weibull_scale_location_linear_model <- 
+  filter_to_model_shape(errors_weibull, 1,1, melt_num = 9)
 
+weibull_location_shift_quadratic_model <- 
+  filter_to_model_shape(errors_weibull, 2,0, melt_num = 9)
 
-normal_pow_melted_data_het <- 
-  errors_normal_pow %>% 
-  dplyr::filter(rho==1) %>% 
-  melt(id.vars = seq(1,8)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>% 
-  select(-c(true_quan))
+weibull_scale_location_quadratic_model <- 
+  filter_to_model_shape(errors_weibull, 2,1, melt_num = 9)
 ```
 
 ```{r}
-weibull_lin_melted_data_iid <- 
-  errors_weibull_lin %>% 
-  dplyr::filter(rho==0) %>% 
-  melt(id.vars = seq(1,9)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>% 
-  select(-c( true_quan))
-
-
-weibull_lin_melted_data_het <- 
-  errors_weibull_lin %>% 
-  dplyr::filter(rho==1) %>% 
-  melt(id.vars = seq(1,9)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>%   select(-c(true_quan))
-
-weibull_pow_melted_data_iid <- 
-  errors_weibull_pow%>% 
-  dplyr::filter(rho==0) %>% 
-  melt(id.vars = seq(1,9)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>%   select(-c( true_quan))
-
-
-weibull_pow_melted_data_het <- 
-  errors_weibull_pow %>% 
-  dplyr::filter(rho==1) %>% 
-  melt(id.vars = seq(1,9)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>%   select(-c(true_quan))
-```
-
-
-
-```{r, message=FALSE, warning=FALSE}
-t_lin_melted_data_iid <- 
-  errors_t_lin %>% 
-  dplyr::filter(rho==0) %>% 
-  melt(id.vars = seq(1,8)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>% 
-  select(-c(true_quan))
-
-
-t_lin_melted_data_het <- 
-  errors_t_lin %>% 
-  dplyr::filter(rho==1) %>% 
-  melt(id.vars = seq(1,8)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>% 
-  select(-c(true_quan))
-
-t_pow_melted_data_iid <- 
-  errors_t_pow %>% 
-  dplyr::filter(rho==0) %>% 
-  melt(id.vars = seq(1,8)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>% 
-  select(-c(true_quan))
-
-
-t_pow_melted_data_het <- 
-  errors_t_pow %>% 
-  dplyr::filter(rho==1) %>% 
-  melt(id.vars = seq(1,8)) %>% 
-  mutate(quantile_final = ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"), 
-                                 ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                                         quantile))) %>% 
-  select(-c(true_quan))
-
+rm(errors_normal)
+rm(errors_t)
+rm(errors_weibull)
 ```
 
 
@@ -732,8 +661,7 @@ ui <- fluidPage(
                     selected = 0.97),
         
         radioButtons("method", h5("Methods to show"), 
-                    choices = list("Bias Correction One",
-                                   "Bias Correction Two", 
+                    choices = list("Bias Correction",
                                    "No Correction", 
                                    "Show All"),
                     selected = "Show All"),
@@ -784,7 +712,6 @@ ui <- fluidPage(
 ```
 
 
-
 ## server 
 
 ```{r}
@@ -792,18 +719,18 @@ server <- function(input, output) {
   
   distribution_data <- reactive({
     
-        if (input$distribution=='weibull') {
+        if (input$distribution=='norm') {
           if (input$rho==0){
             if (input$power==1){
-                chosen_distribution <- weibull_lin_melted_data_iid
+               chosen_distribution <- normal_location_shift_linear_model
             } else {
-               chosen_distribution <- weibull_pow_melted_data_iid
+               chosen_distribution <- normal_location_shift_quadratic_model
             }
           } else {
             if (input$power==1){
-               chosen_distribution <- weibull_lin_melted_data_het
+               chosen_distribution <- normal_scale_location_linear_model
             } else {
-               chosen_distribution <- weibull_pow_melted_data_het
+               chosen_distribution <- normal_scale_location_quadratic_model
 
             }
           }
@@ -811,31 +738,31 @@ server <- function(input, output) {
           if (input$distribution=='t'){
           if (input$rho==0){
             if (input$power==1){
-            chosen_distribution <- t_lin_melted_data_iid
+            chosen_distribution <- t_location_shift_linear_model
             } else {
-             chosen_distribution <- t_pow_melted_data_iid
+             chosen_distribution <- t_location_shift_quadratic_model
 
             }
           } else {
             if (input$power==1){
-            chosen_distribution <- t_lin_melted_data_het
+            chosen_distribution <- t_scale_location_linear_model
             } else {
-            chosen_distribution <- t_pow_melted_data_het
+            chosen_distribution <- t_scale_location_quadratic_model
 
             }
           }
         } else if (input$rho==0) {
           if (input$power==1){
-          chosen_distribution <- normal_lin_melted_data_iid 
+          chosen_distribution <- weibull_location_shift_linear_model 
           } else {
-          chosen_distribution <- normal_pow_melted_data_iid 
+          chosen_distribution <- weibull_location_shift_quadratic_model 
 
           }
         } else {
            if (input$power==1){
-          chosen_distribution <- normal_lin_melted_data_het 
+          chosen_distribution <- weibull_scale_location_linear_model 
            } else {
-             chosen_distribution <- normal_pow_melted_data_het 
+             chosen_distribution <- weibull_scale_location_quadratic_model 
 
            }
         }
@@ -873,14 +800,14 @@ server <- function(input, output) {
     
         filtere_data_by_param = filtered_data_by_params()
       
-        # if (input$method=="Modeling wrong quantiles") {
-        #    filtere_data_by_param <- filtere_data_by_param %>% dplyr::filter(method!="with_correction")
-        # } else if (input$method=="Bias Correction") {
-        #    filtere_data_by_param <- filtere_data_by_param %>% dplyr::filter(method!="no_correction")
-        # } else {
-        #    filtere_data_by_param <- filtere_data_by_param
-        # }
-        # 
+        if (input$method=="No Correction") {
+           filtere_data_by_param <- filtere_data_by_param %>% dplyr::filter(method=="no_correction")
+        } else if (input$method=="Bias Correction") {
+           filtere_data_by_param <- filtere_data_by_param %>% dplyr::filter(method!="no_correction")
+        } else {
+           filtere_data_by_param <- filtere_data_by_param
+        }
+
         return (data.frame(filtere_data_by_param))
   })
    
@@ -975,57 +902,48 @@ shinyApp(ui = ui, server = server)
 
 ## Normal Distribution
 
-```{r, fig.height=12, fig.width=12}
-iid <- ggplot(normal_melted_data_iid %>% 
+```{r}
+unique(normal_location_shift_linear_model$quantile_final)
+```
+
+
+```{r, message=FALSE}
+ggplot(normal_location_shift_linear_model %>% 
        dplyr::filter((p %in% c(15)) & (sigma == 0.1)  
                      & (quantile %in% c(0.97,0.99))
-                     & (n %in% ns)),
-       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quntile_final)))+
-geom_boxplot(inherit.aes = T, 
-             col = "#585858", outlier.size = 0.15)+
+                     & (n %in% ns) & (power == 1) & (rho==0) 
+                     & (method != "bias_correction_one")),
+       aes(x = as.factor(n), y = log(value+1), 
+           fill = as.factor(quantile_final)))+
+geom_boxplot(inherit.aes = T, outlier.size = 0.1, alpha = 0.7)+
 facet_grid(~variable, scales = "free") + 
 labs(x = "n", y = "log(value+1)", fill = "Method") +
 scale_fill_brewer(palette="Paired") +
- # theme_light() +
-theme_grey() +
-theme(legend.position = "None")
-
-  
-het <- 
-  ggplot(normal_melted_data_het %>% 
-       dplyr::filter((p %in% c(15)) & (sigma == 0.1)  
-                     & (quantile %in% c(0.97,0.99))
-                     & (n %in% ns)),
-       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quantile_final)))+
-geom_boxplot(inherit.aes = T, 
-             col = "#585858", outlier.size = 0.15)+
-facet_grid(~variable, scales = "free") + 
-labs(x = "n", y = "log(value+1)", fill = "Method") +
-scale_fill_brewer(palette="Paired") +
- # theme_light() +
-theme_grey() +
-theme(legend.position = "bottom")
-
-
-grid.arrange(arrangeGrob(iid, top="Location model"), 
-             arrangeGrob(het, top="Scale-location model"), 
-             nrow = 2, heights = c(0.47,0.53))
+theme_minimal() +
+# theme_grey() +
+theme(legend.position = "bottom", 
+      panel.grid.major = element_blank())
+# 
+# grid.arrange(arrangeGrob(iid, top="Location model"), 
+#              arrangeGrob(het, top="Scale-location model"), 
+#              nrow = 2, heights = c(0.47,0.53))
 ```
 
 ```{r, fig.height=12, fig.width=12}
-ggplot(t_melted_data_iid %>% 
+ggplot(t_location_shift_linear_model %>% 
        dplyr::filter((p %in% c(15)) & (df %in% dfs)  
                      & (quantile %in% c(0.97,0.99))
-                     & (n %in% ns)),
-       aes(x = as.factor(n), y = log(value+1), fill = as.factor(quantile_final)))+
-geom_boxplot(inherit.aes = T, 
-             col = "#585858", outlier.size = 0.15)+
+                     & (n %in% ns) & (power == 1) & (rho==0) 
+                     & (method != "bias_correction_one")),
+       aes(x = as.factor(n), y = log(value+1), 
+           fill = as.factor(quantile_final)))+
+geom_boxplot(inherit.aes = T, outlier.size = 0.1, alpha = 0.7)+
 facet_grid(df~variable, scales = "free") + 
 labs(x = "n", y = "log(value+1)", fill = "Method") +
 scale_fill_brewer(palette="Paired") +
- # theme_light() +
-theme_grey() +
-theme(legend.position = "None")
+theme_minimal() +
+theme(legend.position = "bottom", 
+      panel.grid.major = element_blank()) 
 
 ```
 
@@ -1053,42 +971,44 @@ theme(legend.position = "None")
 ## isotonic
 
 ```{r}
-df <- 2
+scale <- 2
+shape <-2
 
 ## model settings
-true_coefs_xs <- list(rep(1,2), rep(1,6) ,rep(1,11), rep(1,21))
-true_coefs_x <- rep(1,11)
+p <- 10
 rho <- 0
+power <-1
 
 tau_true <- 0.99
 taus_wrong <- c(0.97)
 
 ## sample settings
-n_test <- 3000
-ns <- c(125,250,500,1000,2000)
+n_test <- 1000
 n <- 250
-x_mean <- 1
+x_mean <- 3
 x_sd <- 0.01
 
-error_distribution_type <- "t"
-error_distribution_params <- df
+error_distribution_type <- "weibull"
+error_distribution_params <- c(shape,scale)
 ```
 
 
 ```{r}
-test_data <- randomize_data(n_test, error_distribution_type = error_distribution_type, error_distribution_params = error_distribution_params, x_mean = x_mean, x_sd = x_sd, true_coefs_x = true_coefs_x, rho=rho)
+test_data <- randomize_data(n_test, error_distribution_type = error_distribution_type, error_distribution_params = error_distribution_params, x_mean = x_mean, x_sd = x_sd, p=p, rho=rho, power=1)
 
 
 train_data <- randomize_data(n, error_distribution_type, error_distribution_params, 
-                             x_mean, x_sd, true_coefs_x, rho = rho) 
+                             x_mean, x_sd, p=p, rho = rho, power=1) 
 
-quan_line_coefficients <- compute_conditional_quantile_line(tau_true, error_distribution_type, error_distribution_params, true_coefs_x, rho = rho)
+quan_line_coefficients <- compute_conditional_quantile_line(tau_true, error_distribution_type, error_distribution_params, rho = rho, p=p)
 
 test_predictions <-
   compute_test_predictions_under_settings(n, error_distribution_type = "t",
                                           error_distribution_params = df,
-                                          n_test = n_test, test_data = test_data,
-                                          x_mean = x_mean, x_sd = x_sd, rho = rho)
+                                          n_test = n_test, test_data = test_data, p=p,
+                                          x_mean = x_mean, x_sd = x_sd, 
+                                          rho = rho, sample_size = 1)
+
 
 errors <- cbind(method = "qr",
                 compute_Bias_Var(test_predictions = test_predictions, n_test = n_test))
@@ -1101,13 +1021,58 @@ test_predictions_bias_correction <-
                                           x_mean = x_mean, x_sd = x_sd, rho = rho,
                                           bias_correction = T, val_size = 0.8)
 
-
 errors_bias_corretion <- cbind(method = "bias_correction",
   compute_Bias_Var(test_predictions = test_predictions_bias_correction, n_test = n_test)) 
 
 all_errors <- rbind(errors, errors_bias_corretion)
 
 ```
+
+```{r}
+## 
+library(EXRQ)
+
+wang_pred <- TwoStage(train_data$y, 
+         as.matrix(train_data %>% select(-y)), 
+         as.matrix(test_data%>% select(-y)), 0.99, k=10, tol = 1e-04)
+
+pred_99 <- 
+  test_predictions %>% 
+  filter((quantile == 0.99) & (method == "no_correction"))  %>% 
+  select('X4')
+
+pred_97 <- 
+  test_predictions %>% 
+  filter((quantile == 0.97) & (method == "no_correction"))  %>% 
+  select('X4')
+
+bias_correction_97 <- 
+  test_predictions %>% 
+  filter((quantile == 0.97) & (method == "bias_correction_one"))  %>% 
+  select('X4')
+
+true_quantile_in_x <- 
+  test_predictions %>% 
+  filter((quantile == 0.97) & (method == "bias_correction_one"))  %>% 
+  select('true_quantile_in_x')
+
+predictions_compare <- 
+  test_data %>% 
+  mutate(pred_99 = pred_99$X4,
+         pred_97 = pred_97$X4,
+         bias_correction_97 = bias_correction_97$X4,
+         true_quantile_in_x = true_quantile_in_x$true_quantile_in_x,
+         wang_pred = wang_pred$Q2Stage)
+
+mean((predictions_compare$true_quantile_in_x - predictions_compare$wang_pred)^2, na.rm = T)
+mean((predictions_compare$true_quantile_in_x - predictions_compare$bias_correction_97)^2)
+mean((predictions_compare$true_quantile_in_x - predictions_compare$pred_99)^2)
+mean((predictions_compare$true_quantile_in_x - predictions_compare$pred_97)^2)
+
+
+```
+
+
 
 ```{r}
 ggplot(all_errors %>% melt(id.vars = c(1,2,3)), 
