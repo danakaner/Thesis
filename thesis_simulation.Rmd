@@ -18,6 +18,7 @@ library(dplyr)
 library(reshape2)
 library(caret)
 
+
 ## Visualization
 library(ggplot2) 
 library(grid) 
@@ -32,12 +33,45 @@ library(DT)
 
 library(isotone)
 library(sqldf)
-
+library(EXRQ)
+library(evd)
 
 library(foreach)
 library(doParallel)
 ```
 
+# Settings for all models
+
+```{r}
+## model settings
+ps <- c(1,8,15)
+rhos <- c(0,1)
+powers <- c(1,2)
+
+tau_true <- 0.99
+taus_wrong <- c(0.97, 0.98)
+
+## sample settings
+n_test <- 2000
+ns <- c(200,400,800,1600)
+
+x_mean <- 3
+x_sd <- 0.01
+
+## parallel
+packages = c("dplyr", "quantreg", "isotone", "sqldf", "knitr", "reshape", "reshape2","caret", "EXRQ","evd")
+```
+
+
+```{r}
+## distribution settings
+sigmas <- c(0.01, 0.05, 0.1)
+
+shapes <- c(0.5,1,2)
+scales <- c(0.5,1,2)
+
+dfs <- c(2,5,10)
+```
 
 
 # Auxiliary Functions
@@ -94,6 +128,8 @@ randomize_data <- function(n, error_distribution_type, error_distribution_params
 ```
 
 
+
+
 ## compute_conditional_quantile_line
 ```{r}
 compute_conditional_quantile_line <- function(tau_true, error_distribution_type, 
@@ -133,6 +169,8 @@ compute_conditional_quantile_line <- function(tau_true, error_distribution_type,
 ## compute_test_predictions_under_settings
 
 
+### attantion: altered it after running the simulatio, check before i run it again
+
 ```{r}
 compute_test_predictions_under_settings <- function(n, error_distribution_type, error_distribution_params,
                                                 n_test, test_data, x_mean, x_sd, rho = 0, p, power = 1, 
@@ -149,10 +187,9 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
   test_predictions = data.frame(matrix(NA, nrow = n_test*(length(all_taus)), 
                                        ncol = (sample_size + 3)))
 
-  test_predictions_bias_correction = data.frame(matrix(NA, nrow = n_test*(length(all_taus)), 
-                                                       ncol = (sample_size + 3)))
-  
-  test_predictions_bagged_isotonic = data.frame(matrix(NA, nrow = n_test*(length(all_taus)), 
+  test_predictions_EXRQ = data.frame(matrix(NA, nrow = n_test, ncol = (sample_size + 3)))
+
+  test_predictions_ICQR = data.frame(matrix(NA, nrow = n_test*(length(all_taus)), 
                                                        ncol = (sample_size + 3)))
 
   ## compute true line and its prediction on test set
@@ -166,11 +203,22 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
   ## compute models and predictions on test set
   for (sample in seq(1,sample_size)) {
 
-    train_data <- randomize_data(n, error_distribution_type, error_distribution_params, 
+   train_data <- randomize_data(n, error_distribution_type, error_distribution_params, 
                                  x_mean = x_mean, x_sd = x_sd, rho = rho, p = p, 
                                  power = power, true_coefs_x = true_coefs_x) 
     
-    bs <- 25
+    
+   ## EVT two-steps estimation - EXRQ
+   k <- 4.5 * (n^(1/3))
+   wang_pred <- TwoStage(train_data$y, as.matrix(train_data %>% select(-y)), 
+                         as.matrix(test_data%>% select(-y)), tau_true, k = k, tol = 1e-04)
+   
+   test_predictions_EXRQ[1:n_test,1] <- rep(all_taus[(i+1)],n_test)
+   test_predictions_EXRQ[1:n_test,2] <- true_quan_line_on_test
+   test_predictions_EXRQ[1:n_test,3] <- rep("EXRQ",n_test)
+   test_predictions_EXRQ[1:n_test,(sample+3)] <- wang_pred$Q2Stage
+    
+    ## less extrem quantile and ICQR
     n_folds <- 5
     len <- length(train_data$y)
     folds <- createFolds(train_data$y, k = n_folds)
@@ -186,31 +234,6 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
          test_predictions[((n_test*i)+1):(n_test*(i+1)),2] <- true_quan_line_on_test
          test_predictions[((n_test*i)+1):(n_test*(i+1)),3] <- rep("no_correction",n_test)
          test_predictions[((n_test*i)+1):(n_test*(i+1)),(sample+3)] <- predict
-  
-
-         ## bias_correction - first method  
-         step_mean_test <- rep(0, length(test_data$y))
-         for (b in 1:bs) {
-           
-            small_train_data <- sample_n(train_data,(bias_correction_val_size*len), replace = F)
-            small_eval_data <- sqldf("select * from train_data except select * from small_train_data")
-
-            fit_small_train <- rq(y ~ ., tau = all_taus[(i+1)], data = small_train_data)
-            predict_on_val <- predict(fit_small_train, small_eval_data) 
-            
-            res_p <- gpava(z = predict_on_val, y = small_eval_data$y, 
-                       solver = weighted.fractile, p = tau_true)
-          
-            step_function <- stepfun(x = sort(res_p$z),y = sort(c(min(res_p$x),res_p$x)))
-            
-            step_mean_test <- step_mean_test + step_function(predict)
-            
-         }
-         test_predictions_bias_correction[((n_test*(i))+1):(n_test*(i+1)),1] <- rep(all_taus[(i+1)],n_test)
-         test_predictions_bias_correction[((n_test*(i))+1):(n_test*(i+1)),2] <- true_quan_line_on_test
-         test_predictions_bias_correction[((n_test*(i))+1):(n_test*(i+1)),3] <- rep("bias_correction_one",n_test)
-         test_predictions_bias_correction[((n_test*(i))+1):(n_test*(i+1)),(sample+3)] <- (step_mean_test/bs)
-         
          
          ## bias_correction - second method  
          step_mean_test <- rep(0, length(test_data$y))
@@ -231,10 +254,10 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
 
             
          }
-         test_predictions_bagged_isotonic[((n_test*(i))+1):(n_test*(i+1)),1] <- rep(all_taus[(i+1)],n_test)
-         test_predictions_bagged_isotonic[((n_test*(i))+1):(n_test*(i+1)),2] <- true_quan_line_on_test
-         test_predictions_bagged_isotonic[((n_test*(i))+1):(n_test*(i+1)),3] <- rep("bias_correction_two",n_test)
-         test_predictions_bagged_isotonic[((n_test*(i))+1):(n_test*(i+1)),(sample+3)] <- (step_mean_test/n_folds)
+         test_predictions_ICQR[((n_test*(i))+1):(n_test*(i+1)),1] <- rep(all_taus[(i+1)],n_test)
+         test_predictions_ICQR[((n_test*(i))+1):(n_test*(i+1)),2] <- true_quan_line_on_test
+         test_predictions_ICQR[((n_test*(i))+1):(n_test*(i+1)),3] <- rep("ICQR",n_test)
+         test_predictions_ICQR[((n_test*(i))+1):(n_test*(i+1)),(sample+3)] <- (step_mean_test/n_folds)
 
     }
   
@@ -243,15 +266,15 @@ compute_test_predictions_under_settings <- function(n, error_distribution_type, 
   colnames(test_predictions)[3] <- "method"
   colnames(test_predictions)[2] <- "true_quantile_in_x"
   colnames(test_predictions)[1] <- "quantile"
-  colnames(test_predictions_bias_correction)[3] <- "method"
-  colnames(test_predictions_bias_correction)[2] <- "true_quantile_in_x"
-  colnames(test_predictions_bias_correction)[1] <- "quantile"
-  colnames(test_predictions_bagged_isotonic)[3] <- "method"
-  colnames(test_predictions_bagged_isotonic)[2] <- "true_quantile_in_x"
-  colnames(test_predictions_bagged_isotonic)[1] <- "quantile"
+  colnames(test_predictions_EXRQ)[3] <- "method"
+  colnames(test_predictions_EXRQ)[2] <- "true_quantile_in_x"
+  colnames(test_predictions_EXRQ)[1] <- "quantile"
+  colnames(test_predictions_ICQR)[3] <- "method"
+  colnames(test_predictions_ICQR)[2] <- "true_quantile_in_x"
+  colnames(test_predictions_ICQR)[1] <- "quantile"
   
 
-  return (rbind(test_predictions,test_predictions_bias_correction, test_predictions_bagged_isotonic))
+  return (rbind(test_predictions,test_predictions_EXRQ,test_predictions_ICQR))
 
 }
 ```
@@ -266,7 +289,7 @@ compute_Bias_Var <- function(test_predictions, n_test) {
   
   errors = data.frame()
 
-  for (i in 1:(length(all_taus)*3)){
+  for (i in 1:(length(all_taus)*2+1)){
     
     ## remove the column of the number of quantile
     quantile_test_predictions_data <- 
@@ -306,38 +329,6 @@ compute_Bias_Var <- function(test_predictions, n_test) {
 
 
 
-# Settings for all models
-
-```{r}
-## model settings
-ps <- c(1,8,15)
-rhos <- c(0,1)
-powers <- c(1,2)
-
-tau_true <- 0.99
-taus_wrong <- c(0.97, 0.98)
-
-## sample settings
-n_test <- 2000
-ns <- c(150,300,600,1200)
-
-x_mean <- 3
-x_sd <- 0.01
-
-## parallel
-packages = c("dplyr", "quantreg", "isotone", "sqldf", "knitr", "reshape", "reshape2","caret")
-```
-
-
-```{r}
-## distribution settings
-sigmas <- c(0.01, 0.05, 0.1)
-
-shapes <- c(0.5,1,2)
-scales <- c(0.5,1,2)
-
-dfs <- c(2,5,10)
-```
 
 # Normal Errors
 
@@ -357,6 +348,7 @@ run_par <- function(p, power, rho, sigma) {
                                 error_distribution_params = sigma,
                                 x_mean = x_mean, x_sd = x_sd,p = p, power=power, rho = rho)
      for (n in ns) {
+
        
          test_predictions <-
            compute_test_predictions_under_settings(n, error_distribution_type = "norm",
@@ -403,7 +395,6 @@ errors_normal <-
       errors
   }
 
-write.csv(errors_normal, "relative_and_cv_corrections_outputs/errors_normal.csv", row.names=FALSE)
 strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
 stopCluster(cl)
 ```
@@ -468,7 +459,6 @@ errors_t <-
       errors = run_par(p, power,rho, df)
       errors
   }
-write.csv(errors_t, "relative_and_cv_corrections_outputs/errors_t.csv", row.names=FALSE)
 strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
 stopCluster(cl)
 ```
@@ -537,25 +527,33 @@ errors_weibull <-
   }
 
 strptime(Sys.time(), "%Y-%m-%d %H:%M:%S")
-write.csv(errors_weibull, "relative_and_cv_corrections_outputs/errors_weibull.csv", row.names=FALSE)
 
 stopCluster(cl)
 ```
 
+```{r}
 
+```
+
+
+
+```{r}
+write.csv(errors_normal, "cv_isotonic_and_exrq_outputs/errors_normal.csv", row.names=FALSE)
+write.csv(errors_weibull, "cv_isotonic_and_exrq_outputs/errors_weibull.csv", row.names=FALSE)
+write.csv(errors_t, "cv_isotonic_and_exrq_outputs/errors_t.csv", row.names=FALSE)
+
+```
 
 
 # Application
 
-
 ```{r}
-errors_normal <- read.csv("relative_and_cv_corrections_outputs/errors_normal.csv", sep =",")
+errors_normal <- read.csv("cv_isotonic_and_exrq_outputs/errors_normal.csv", sep =",")
 
-errors_t <- read.csv("relative_and_cv_corrections_outputs/errors_t.csv", sep =",")
+errors_t <- read.csv("cv_isotonic_and_exrq_outputs/errors_t.csv", sep =",")
 
-errors_weibull <- read.csv("relative_and_cv_corrections_outputs/errors_weibull.csv", sep =",")
+errors_weibull <- read.csv("cv_isotonic_and_exrq_outputs/errors_weibull.csv", sep =",")
 ```
-
 
 
 ```{r}
@@ -564,9 +562,7 @@ filter_to_model_shape <- function(data, power, rho, melt_num = 8 ) {
   dplyr::filter((power==power) & (rho==rho)) %>% 
   melt(id.vars = seq(1,melt_num)) %>% 
   mutate(quantile_final = 
-           ifelse(method == "bias_correction_one", paste0(quantile,"_correction_1"),
-                  ifelse(method == "bias_correction_two", paste0(quantile,"_correction_2"),
-                         quantile))) %>% 
+           ifelse(method != "no_correction", paste0(quantile,method),quantile)) %>% 
   select(-c(true_quan))
   
   return(filtered_data)
@@ -618,6 +614,7 @@ weibull_scale_location_quadratic_model <-
   filter_to_model_shape(errors_weibull, 2,1, melt_num = 9)
 ```
 
+
 ```{r}
 rm(errors_normal)
 rm(errors_t)
@@ -660,11 +657,11 @@ ui <- fluidPage(
                     choices = taus_wrong,
                     selected = 0.97),
         
-        radioButtons("method", h5("Methods to show"), 
-                    choices = list("Bias Correction",
-                                   "No Correction", 
-                                   "Show All"),
-                    selected = "Show All"),
+        checkboxGroupInput("method", h5("Methods to show"), 
+                    choices = list("EXRQ" = "EXRQ",
+                                   "ICQR" = "ICQR",
+                                   "No Correction" = "no_correction"),
+                    selected = list("ICQR","no_correction")),
         
         checkboxGroupInput("n", h5("Train set size"),
                        choices = ns, selected = ns))),
@@ -800,13 +797,11 @@ server <- function(input, output) {
     
         filtere_data_by_param = filtered_data_by_params()
       
-        if (input$method=="No Correction") {
-           filtere_data_by_param <- filtere_data_by_param %>% dplyr::filter(method=="no_correction")
-        } else if (input$method=="Bias Correction") {
-           filtere_data_by_param <- filtere_data_by_param %>% dplyr::filter(method!="no_correction")
-        } else {
-           filtere_data_by_param <- filtere_data_by_param
-        }
+        
+        filtere_data_by_param <- 
+          filtere_data_by_param %>% 
+          dplyr::filter(method %in% input$method )
+      
 
         return (data.frame(filtere_data_by_param))
   })
@@ -867,17 +862,19 @@ server <- function(input, output) {
         geom_boxplot(col = "#585858", outlier.size = 0.1)+
         facet_wrap(~ variable) + #scales="free"
         labs(x = "n", y = "log(value+1)", fill = "Quantile") +
-        # scale_colour_manual(values = c("0.95" = "#9BC01C", 
-        #                                "0.95_corrected" = "#C3E05E",
-        #                                "0.97" = "#F52549", 
-        #                                "0.97_corrected" = "#FA6775",
-        #                                "0.99" = "#f48d38"))+
-        # scale_fill_manual(values = c("0.95" = "#9BC01C", 
-        #                                "0.95_corrected" = "#C3E05E",
-        #                                "0.97" = "#F52549", 
-        #                                "0.97_corrected" = "#FA6775",
-        #                                "0.99" = "#f48d38"))+
-        scale_fill_brewer(palette="Paired") +
+        scale_colour_manual(values = c("0.97" = "#318ef9",
+                                       "0.97ICQR" = "#66adff",
+                                       "0.98" = "#60cbf7",
+                                       "0.98ICQR" = "#a3e4ff",
+                                       "0.99" = "#ffb24f",
+                                       "0.99ICQR" = "#ffc375"))+
+        scale_fill_manual(values = c("0.97" = "#318ef9",
+                                       "0.97ICQR" = "#66adff",
+                                       "0.98" = "#60cbf7",
+                                       "0.98ICQR" = "#a3e4ff",
+                                       "0.99" = "#ffb24f",
+                                       "0.99ICQR" = "#ffc375"))+
+        # scale_fill_brewer(palette="Paired") +
         theme_grey() +
         theme(legend.position = "bottom")
 
@@ -899,24 +896,30 @@ shinyApp(ui = ui, server = server)
 
 ## summary of interesting cases
 
+```{r}
+t_scale_location_linear_model %>% 
+  filter(p==15 & method =="EXRQ" & (quantile==0.99)) %>% 
+  group_by(n,power,rho,df) %>% 
+  filter(variable =="MSE") %>% 
+  summarise(nas = sum(is.na(value))) %>% 
+  arrange(-nas)
+```
+
+
 
 ## Normal Distribution
-
-```{r}
-unique(normal_location_shift_linear_model$quantile_final)
-```
 
 
 ```{r, message=FALSE}
 ggplot(normal_location_shift_linear_model %>% 
        dplyr::filter((p %in% c(15)) & (sigma == 0.1)  
-                     & (quantile %in% c(0.97,0.99))
-                     & (n %in% ns) & (power == 1) & (rho==0) 
-                     & (method != "bias_correction_one")),
+                     & (quantile %in% c(0.98,0.99))
+                     & (n %in% ns) & (power == 1) & (rho==1) 
+                     & (method != "bias_correction_one") & (variable == "MSE") ),
        aes(x = as.factor(n), y = log(value+1), 
            fill = as.factor(quantile_final)))+
 geom_boxplot(inherit.aes = T, outlier.size = 0.1, alpha = 0.7)+
-facet_grid(~variable, scales = "free") + 
+#facet_grid(~variable, scales = "free") + 
 labs(x = "n", y = "log(value+1)", fill = "Method") +
 scale_fill_brewer(palette="Paired") +
 theme_minimal() +
@@ -983,7 +986,7 @@ tau_true <- 0.99
 taus_wrong <- c(0.97)
 
 ## sample settings
-n_test <- 1000
+n_test <- 2000
 n <- 250
 x_mean <- 3
 x_sd <- 0.01
@@ -1029,12 +1032,14 @@ all_errors <- rbind(errors, errors_bias_corretion)
 ```
 
 ```{r}
-## 
+## out.2stage <- TwoStage(y, x, xstar, tau.e, k=50)
 library(EXRQ)
 
 wang_pred <- TwoStage(train_data$y, 
          as.matrix(train_data %>% select(-y)), 
-         as.matrix(test_data%>% select(-y)), 0.99, k=10, tol = 1e-04)
+         as.matrix(test_data%>% select(-y)), tau.e = c(0.99), 
+         k=4.5*(length(train_data$y)^0.3), tol = 1e-04)
+sum(is.na(wang_pred$Q2Stage))
 
 pred_99 <- 
   test_predictions %>% 
